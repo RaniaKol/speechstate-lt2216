@@ -47,8 +47,12 @@ interface SDSContext {
     username: string;
     celebrity: string;
     meet: string;
-    famouS:string;
-    date:string;
+    famouS: string;
+    date: string;
+    intent: string;
+    counter: number;
+    intenDId: string;
+    intentid: string;
     
 }
 
