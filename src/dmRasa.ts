@@ -22,7 +22,7 @@ const grammar: { [index: string]: { intent?: string } } = {
     "Light up the room": { intent: "light up the room" },
     "Vacuum": { intent: "vacuum" },
     "Cook": { intent: "cook" },
-    "Throw_away_the_trash.": { intent: "throw the trash away" },
+    "Throw the trash away": { intent: "throw the trash away" },
     
 }
     
@@ -51,8 +51,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
         },
         init: {
             on: {
-                TTS_READY: 'dmBot',
-                CLICK: 'dmBot'
+                TTS_READY: 'Hello',
+                CLICK: 'Hello'
             }
         },
         Help: { 
@@ -60,11 +60,11 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
             states: {
                 help_message: {
                     entry: say("How can I help you?"),
-                    on: { ENDSPEECH: '#root.dm.dmBot.hist' }, 
+                    on: { ENDSPEECH: '#root.dm.Hello.hist' }, 
                 }
             }
         },
-        dmBot: {
+        Hello: {
             initial: 'Hej',
             states: {
                 hist: {
@@ -100,7 +100,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             
                             {
                                 target: '#root.dm.init',
-                                cond: (context) => context.counter === 3,
+                                cond: (context) => context.counter === 2,
                             },
                         ],
                         },
@@ -114,7 +114,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             on: { ENDSPEECH: 'ask' }
                             },
                         prompt1: {
-                            entry: [say("could you say your name?"), 
+                            entry: [say("Could you say your name?"), 
                                     assign({counter: (context) => context.counter +1})],
                             on: { ENDSPEECH: 'ask' }
                             },
@@ -163,7 +163,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 
                                 {
                                     target: '#root.dm.init',
-                                    cond: (context) => context.counter === 3,
+                                    cond: (context) => context.counter === 2,
                                 },
                             ],
                         },
@@ -242,7 +242,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                                 
                                 {
                                     target: '#root.dm.init',
-                                    cond: (context) => context.counter === 3,
+                                    cond: (context) => context.counter === 2,
                                 },
                             ],
                         },
