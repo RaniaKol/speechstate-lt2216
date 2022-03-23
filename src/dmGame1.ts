@@ -6,8 +6,13 @@ import { MachineConfig, send, Action, assign } from "xstate";
 function say(text: string): Action<SDSContext, SDSEvent> {
     return send((_context: SDSContext) => ({ type: "SPEAK", value: text }))
 }
-const kbRequest = (text: string) =>
-    fetch(new Request(`https://cors.eu.org/https://api.duckduckgo.com/?q=${text}&format=json&skip_disambig=1`)).then(data => data.json())
+const rasaurl = 'https://intent-app1.herokuapp.com/model/parse'
+const nluRequest = (text: string) =>
+    fetch(new Request(rasaurl, {
+        method: 'POST',
+        body: `{"text": "${text}"}`
+    }))
+        .then(data => data.json());
 
 const grammar: { [index: string]: { question1?: string, question2?: string, question3?: string, question4?:string, question5?:string,username?:string } } = {
     "Future.": { question1: "Correct" },
@@ -39,6 +44,9 @@ const yes_nogrammar: { [index: string]: { yes_no?: string, help?: string} } = {
     "Help.":{help:"help"},
     "I would like to help me":{help:"help"}
 }
+
+
+
 export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     initial: 'idle',
     
@@ -180,6 +188,8 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         on: { ENDSPEECH: 'ask' }
                     }
                 }
+                    
+                
             },
             game_starts: {
                 initial: 'prompt0',
@@ -192,13 +202,12 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         {target: 'question2',
                         cond: (context) => "question1" in (grammar[context.recResult[0].utterance] || {}),
                         actions: assign((context) => { return { question1: grammar[context.recResult[0].utterance].question1! }}),
-                    },
-                        
-                        {target: '.nomatch',
-                        cond: (context) => context.counter === 1},
-                        {target: '.nomatch1',
-                        cond: (context) => context.counter === 2}
 
+                    },
+                    {target: 'try_again1',
+                    cond: (context) => "question1" in (grammar[context.recResult[0].utterance] || {}) !== grammar[context.recResult[0].utterance],
+                        
+                },
                         ],
                     TIMEOUT: [
                         {
@@ -219,56 +228,74 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 states: {
                     prompt0: {
                         entry: [say("Ok, let's start with the first question. What is always in front of you but can't be seen?"), assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'ask1' }
+                        on: { ENDSPEECH: 'ask' }
                     },
                     prompt1: {
                         entry: [say("What is always in front of you but can't be seen?"), assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'ask2' }
+                        on: { ENDSPEECH: 'ask' }
                         
                     },
                     
-                    ask1: {
+                    ask: {
                         entry: send('LISTEN'),
-                        
-                    },
-                    
-                    ask2: {
-                        entry: send('LISTEN'),
-                        
-                    },
-                    
-                    nomatch: {
-                        entry: [say("Sorry, your answer is wrong! You have one more chance."), assign({counter: (context) => context.counter })],
-                        on: { ENDSPEECH: 'prompt1' }
-                    },
-                    nomatch1:{
-                        entry: [say("Your answer is wrong!"), assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'loose' }
-                    },
-                    loose: {
-                         entry: say("sorry, you have lost!"),
                          
-                        }   
+                    },
+                }
+            },
+            try_again1: {
+                initial: "prompt",
+                on: {
+                    RECOGNISED: [{
+                target: '#root.dm.Help',
+                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        },
+                    {
+                 target: 'question2', 
+                 cond: (context) =>"question1" in (grammar[context.recResult[0].utterance] || {}),
+                 actions: assign((context) => { return { question1: grammar[context.recResult[0].utterance].question1! }})},
+                  
+                 
+                 {target: '.loose1'},
+                
+            ],
+            TIMEOUT: [
+                {target: '.prompt'}
+            ],
+                
+
+        },
+        states: {
+            prompt: {
+                entry: say( `Maybe you have to think a little bit more! Try again! What is always in front of you but can't be seen??`), 
+                on: { ENDSPEECH: 'ask' }
+            },
+            ask: {
+                entry: send('LISTEN'),
+            },
+            
+            
+            loose1: {
+                 entry: say("sorry, you lost!")}
                 }
             },
             question2: {
-                initial: "prompt0",
+                initial: 'prompt0',
+                entry: assign({counter: (context) => context.counter = 0}),
                 on: {
-                    RECOGNISED: [{
-                        target: '#root.dm.Help',
-                        cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
-                                },
-                            {
-                         target: 'question3', 
-                         cond: (context) =>"question2" in (grammar[context.recResult[0].utterance] || {}),
-                         actions: assign((context) => { return { question2: grammar[context.recResult[0].utterance].question2! }})},
-                          
-                         
-                         {target: '.nomatch',
-                         cond: (context) => context.counter === 1},
-                         {target: '.nomatch1',
-                         cond: (context) => context.counter === 2}
-                    ],
+                    RECOGNISED: [
+                        {target: '#root.dm.Help',
+                            cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        },
+                        {target: 'question3',
+                        cond: (context) => "question2" in (grammar[context.recResult[0].utterance] || {}),
+                        actions: assign((context) => { return { question2: grammar[context.recResult[0].utterance].question2! }}),
+            
+                    },
+                    {target: 'try_again2',
+                    cond: (context) => "question2" in (grammar[context.recResult[0].utterance] || {}) !== grammar[context.recResult[0].utterance],
+                        
+                },
+                        ],
                     TIMEOUT: [
                         {
                             target: '.prompt0',
@@ -284,67 +311,78 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             cond: (context) => context.counter === 2,
                         },
                     ],
-                
-    
                 },
                 states: {
                     prompt0: {
-                        entry: [send((context) => ({
-                            type: 'SPEAK',
-                            value: `You have answered ${context.question1} the first question. Let's move on on the second. What can you break, even if you never pick it up or touch it?`
-                        })),
-                        assign({counter: (context) => context.counter })],
-                        on: { ENDSPEECH: 'ask1' }
+                        entry: [say(`You have answered correct the first question. Let's move on on the second. What can you break, even if you never pick it up or touch it?`), assign({counter: (context) => context.counter + 1})],
+                        on: { ENDSPEECH: 'ask' }
                     },
                     prompt1: {
-                        entry: [send((context) => ({
-                            type: 'SPEAK',
-                            value: ` What can you break, even if you never pick it up or touch it?`
-                        })),
-                        assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'ask2' }
-                    },
-                    
-                    ask1: {
-                        entry: send('LISTEN'),
-                    },
-                    ask2: {
-                        entry: send('LISTEN'),
+                        entry: [say('What can you break, even if you never pick it up or touch it?'), assign({counter: (context) => context.counter + 1})],
+                        on: { ENDSPEECH: 'ask' }
                         
                     },
-                    nomatch: {
-                        entry: [say("Sorry you have answered incorrectly! Try again!"), assign({counter: (context) => context.counter })],
-                        on: { ENDSPEECH: 'prompt1' }
-                    },
-                    nomatch1: {
-                        entry: [say("You have answered incorrectly!"), assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'loose1' }
-                    },
                     
-                    loose1: {
-                         entry: say("sorry, you have lost!"),
-                            
-                        }
-                    }
+                    ask: {
+                        entry: send('LISTEN'),
+                         
+                    },
+                }
+            },
+            try_again2: {
+                initial: "prompt",
+                on: {
+                    RECOGNISED: [{
+                target: '#root.dm.Help',
+                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        },
+                    {
+                 target: 'question3', 
+                 cond: (context) =>"question2" in (grammar[context.recResult[0].utterance] || {}),
+                 actions: assign((context) => { return { question2: grammar[context.recResult[0].utterance].question2! }})},
+                  
+                 
+                 {target: '.loose2'},
+                
+            ],
+            TIMEOUT: [
+                {target: '.prompt'}
+            ],
+                
+            
+            },
+            states: {
+            prompt: {
+                entry: say( `Your answer is wrong! You have one more chance. What can you break, even if you never pick it up or touch it?`), 
+                on: { ENDSPEECH: 'ask' }
+            },
+            ask: {
+                entry: send('LISTEN'),
+            },
+            
+            
+            loose2: {
+                 entry: say("sorry, you lost!")}
+                }
             },
             question3: {
-                initial: "prompt0",
+                initial: 'prompt0',
+                entry: assign({counter: (context) => context.counter = 0}),
                 on: {
-                    RECOGNISED: [{
-                        target: '#root.dm.Help',
-                        cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
-                                },
-                            {
-                         target: 'question4', 
-                         cond: (context) =>"question3" in (grammar[context.recResult[0].utterance] || {}),
-                         actions: assign((context) => { return { question3: grammar[context.recResult[0].utterance].question3! }})},
-                          
-                         
-                         {target: '.nomatch',
-                         cond: (context) => context.counter === 1},
-                         {target: '.nomatch1',
-                         cond: (context) => context.counter === 2}
-                    ],
+                    RECOGNISED: [
+                        {target: '#root.dm.Help',
+                            cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        },
+                        {target: 'question4',
+                        cond: (context) => "question3" in (grammar[context.recResult[0].utterance] || {}),
+                        actions: assign((context) => { return { question3: grammar[context.recResult[0].utterance].question3! }}),
+            
+                    },
+                    {target: 'try_again3',
+                    cond: (context) => "question3" in (grammar[context.recResult[0].utterance] || {}) !== grammar[context.recResult[0].utterance],
+                        
+                },
+                        ],
                     TIMEOUT: [
                         {
                             target: '.prompt0',
@@ -360,49 +398,58 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                             cond: (context) => context.counter === 2,
                         },
                     ],
-                
-    
                 },
                 states: {
                     prompt0: {
-                        entry: [send((context) => ({
-                            type: 'SPEAK',
-                            value: ` ${context.question2}. Question3. If you've got me, you want to share me; if you share me, you haven't kept me. What am I?`
-                        })),
-                        assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'ask1' }
+                        entry: [say("Correct! Question3. If you've got me, you want to share me; if you share me, you haven't kept me. What am I?"), assign({counter: (context) => context.counter + 1})],
+                        on: { ENDSPEECH: 'ask' }
                     },
                     prompt1: {
-                        entry: [send((context) => ({
-                            type: 'SPEAK',
-                            value: ` If you've got me, you want to share me; if you share me, you haven't kept me. What am I?`
-                        })),
-                        assign({counter: (context) => context.counter + 1})],
-                        on: { ENDSPEECH: 'ask2' }
-                    },
-                    
-                    ask1: {
-                        entry: send('LISTEN'),
-                    },
-
-                    ask2: {
-                        entry: send('LISTEN'),
-                    },
-                    nomatch: {
-                        entry: [say("The answer is wrong! Listen to the question one more time."), assign({counter: (context) => context.counter })],
-                        on: { ENDSPEECH: 'prompt1' }
-                    },
-                    
-                    nomatch1: {
-                            entry: [say("The answer is wrong!"), assign({counter: (context) => context.counter })],
-                            on: { ENDSPEECH: 'loose2' }
-                    },
-                    loose2: {
-                        entry: say("sorry, you have lost!"),
+                        entry: [say("If you've got me, you want to share me; if you share me, you haven't kept me. What am I? What is your answer?"), assign({counter: (context) => context.counter + 1})],
+                        on: { ENDSPEECH: 'ask' }
                         
-
-
-                    }
+                    },
+                    
+                    ask: {
+                        entry: send('LISTEN'),
+                         
+                    },
+                }
+            },
+            try_again3: {
+                initial: "prompt",
+                on: {
+                    RECOGNISED: [{
+                target: '#root.dm.Help',
+                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        },
+                    {
+                 target: 'question4', 
+                 cond: (context) =>"question3" in (grammar[context.recResult[0].utterance] || {}),
+                 actions: assign((context) => { return { question3: grammar[context.recResult[0].utterance].question3! }})},
+                  
+                 
+                 {target: '.loose3'},
+                
+            ],
+            TIMEOUT: [
+                {target: '.prompt'}
+            ],
+                
+            
+            },
+            states: {
+            prompt: {
+                entry: say( "The answer is wrong! Listen to the question one more time. If you've got me, you want to share me; if you share me, you haven't kept me. What am I?"), 
+                on: { ENDSPEECH: 'ask' }
+            },
+            ask: {
+                entry: send('LISTEN'),
+            },
+            
+            
+            loose3: {
+                 entry: say("sorry, you lost!")}
                 }
             },
             question4: {
@@ -433,7 +480,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         entry:send('LISTEN')
                     },
                     nomatch: {
-                        entry: say("Sorry you have lost."),
+                        entry: say("Sorry you lost."),
                         
                     }
                 }
@@ -461,7 +508,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     prompt: {
                         entry: [send((context) => ({
                             type: 'SPEAK',
-                            value: `You have answered ${context.question4} the fourth question. And now it's time for the last one. If you drop me I'm sure to crack, but give me a smile and I'll always smile back. What am I?`
+                            value: `You have answered ${context.question4} the fourth question. What a genius! Now it's time for the last one. If you drop me I'm sure to crack, but give me a smile and I'll always smile back. What am I?`
                         })),
                         assign({counter: (context) => context.counter + 1})],
                         on: { ENDSPEECH: 'ask' }
@@ -481,7 +528,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         entry: send('LISTEN'),
                     },
                     nomatch: {
-                        entry: say("Sorry you have answered incorrectly! You have lost!"),
+                        entry: say(" You have answered incorrectly! You have lost!"),
                         
                     },
             
@@ -490,8 +537,18 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 
             }
         },
-           
+
+
+
+
             Win: {
                 initial: "prompt",
                 states: {
-                    prompt: { entry: say("Congratulations, you have won!") }}}}}}})
+                    prompt: { entry: say("Congratulations, you won!")
+                }
+            }
+        }
+    }
+}
+    }
+})
