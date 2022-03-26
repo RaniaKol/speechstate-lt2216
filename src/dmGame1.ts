@@ -14,40 +14,62 @@ const nluRequest = (text: string) =>
     }))
         .then(data => data.json());
 
+        // ****It takes some time for the rasa-app to wake up!****
+
 const grammar: { [index: string]: { question1?: string, question2?: string, question3?: string, question4?:string, question5?:string,username?:string } } = {
     "Future.": { question1: "Correct" },
     "The future.": { question1: "Correct" },
     "Promise.": { question2: "Well done!"},
     "A promise." : { question2: "Well done!"},
-    "Secret." : { question3: "That's correct."},
-    "A secret." : { question3: "That's correct."},
-    "My name." : { question4: "Correct"},
+    "Secret." : { question3: "Great!"},
+    "A secret." : { question3: "Great!"},
+    "My name?" : { question4: "Correct"},
     "Your name." : { question4: "Correct"},
     "Mirror." : { question5: "Correct"},
     "A mirror." : { question5: "Correct"}
-
-
-    
-    
 }
 
-const yes_nogrammar: { [index: string]: { yes_no?: string, help?: string} } = {
-    "Yes.": { yes_no: "yes"},
-    "Of course.": { yes_no: "yes"},
-    "Sure.": { yes_no: "yes"},
-    "Absolutely.": { yes_no: "yes"},
-    "No.": { yes_no: "no"},
-    "No way.": { yes_no: "no"},
-    "Of course not.": { yes_no: "no"},
-    "Absolutely not.": { yes_no: "no"},
+
+const help_grammar: { [index: string]: { help?: string} } = {
     "Help me.":{help: "help"},
     "Help.":{help:"help"},
     "I would like to help me":{help:"help"}
 }
 
+// intents in rasa: (
+
+//- intent: affirm
+ // examples: |
+  //- y
+  //- indeed
+  //- of course
+  //- that sounds good
+  //- correct
+  //- start
+  //- yes
+  //- Let's play
+  //- Go
+  //- Begin the game
+  //- sure
+  //- absolutely
+  //- yep
+  //- yeah 
+  //- yes I want
+
+//- intent: deny
+//examples: |
+ // - no
+ // - n
+ // - never
+  //- I don't think so
+  //- don't like that
+  //- no way
+  //- not really
+ // - of course not
+ // - absolutely not)
 
 
-export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
+ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
     initial: 'idle',
     
     states: {
@@ -84,7 +106,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         RECOGNISED: [
                             {
                                 target: '#root.dm.Help',
-                                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {})
+                                cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {})
                             },
                             {
                                 target: 'begin',
@@ -141,18 +163,13 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                     RECOGNISED: [
                         {
                             target: '#root.dm.Help',
-                            cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                            cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
-                        {
-                            target: 'game_starts',
-                            cond: (context) => "yes_no" in (yes_nogrammar[context.recResult[0].utterance] || {}) && yes_nogrammar[context.recResult[0].utterance].yes_no === 'yes',
-                            
-                        },
-                        {
-                            target: 'Hej',
-                            cond: (context) => "yes_no" in (yes_nogrammar[context.recResult[0].utterance] || {}) && yes_nogrammar[context.recResult[0].utterance].yes_no === 'no',
-                            
-                        },
+                        {target: 'intent_info',
+                       
+                       actions: assign({ intentid: (context) => context.recResult[0].utterance })},
+
+                        
                         {
                             target: '.nomatch'
                         }
@@ -188,8 +205,52 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         on: { ENDSPEECH: 'ask' }
                     }
                 }
-                    
+            },
+            
+            intent_info: {
+                invoke: {
+                    id: 'intenDId',
+                    src: (context, event) => nluRequest(context.recResult[0].utterance),
+                    onDone: {
+                        target: 'start',
+                        actions: [
+                        assign((context, event) => { return { intentid: event.data.intent.name } }),
+                        send('DONE')
+                            ],
+                    },
+                    onError: {
+                        target: 'Hej',
+                        actions: [(context,event) => console.log(event.data)]
+                        
+                    }
+                }
+            },
+            
+            start: {
                 
+                on: { 
+                    DONE: [{
+                        cond: (context: { intentid: string; }) => "affirm" === context.intentid,
+                        actions: (context:SDSContext) => console.log( context.intentid),
+                        target: 'game_starts',
+                    },
+                    {
+                        cond: (context: { intentid: string; }) => "deny" === context.intentid,
+                        actions: (context:SDSContext) => console.log( context.intentid),
+                        target: 'begin',
+                    },
+                    {
+                        
+                        target: '.nomatch',
+                    }]
+                },
+                states:{
+                    nomatch: {
+                        entry: say("Sorry I didn't catch that"),
+                        on: { ENDSPEECH: '#root.dm.Help' },
+                    },
+                    
+                }
             },
             game_starts: {
                 initial: 'prompt0',
@@ -197,7 +258,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [
                         {target: '#root.dm.Help',
-                            cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                            cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
                         {target: 'question2',
                         cond: (context) => "question1" in (grammar[context.recResult[0].utterance] || {}),
@@ -247,7 +308,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [{
                 target: '#root.dm.Help',
-                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
                     {
                  target: 'question2', 
@@ -284,7 +345,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [
                         {target: '#root.dm.Help',
-                            cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                            cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
                         {target: 'question3',
                         cond: (context) => "question2" in (grammar[context.recResult[0].utterance] || {}),
@@ -334,7 +395,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [{
                 target: '#root.dm.Help',
-                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
                     {
                  target: 'question3', 
@@ -371,7 +432,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [
                         {target: '#root.dm.Help',
-                            cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                            cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
                         {target: 'question4',
                         cond: (context) => "question3" in (grammar[context.recResult[0].utterance] || {}),
@@ -421,7 +482,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [{
                 target: '#root.dm.Help',
-                cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                         },
                     {
                  target: 'question4', 
@@ -457,7 +518,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [{
                         target: '#root.dm.Help',
-                        cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                                 },
                             {
                          target: 'question5', 
@@ -490,7 +551,7 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                 on: {
                     RECOGNISED: [{
                         target: '#root.dm.Help',
-                        cond: (context) => "help" in (yes_nogrammar[context.recResult[0].utterance] || {}),
+                        cond: (context) => "help" in (help_grammar[context.recResult[0].utterance] || {}),
                                 },
                             {
                          target: 'Win', 
@@ -528,27 +589,17 @@ export const dmMachine: MachineConfig<SDSContext, any, SDSEvent> = ({
                         entry: send('LISTEN'),
                     },
                     nomatch: {
-                        entry: say(" You have answered incorrectly! You have lost!"),
-                        
-                    },
+                        entry: say(" You have answered incorrectly! You lost!")}
+                    }
+                },
             
-            
-                    
-                
-            }
-        },
-
-
-
-
-            Win: {
-                initial: "prompt",
-                states: {
-                    prompt: { entry: say("Congratulations, you won!")
+                Win: {
+                    initial: "prompt",
+                        states: {
+                            prompt: { entry: say("Congratulations, you won!")}
+                        }
+                    }
                 }
             }
         }
-    }
-}
-    }
-})
+    })

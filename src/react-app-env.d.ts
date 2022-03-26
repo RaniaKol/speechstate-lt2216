@@ -49,9 +49,12 @@ interface SDSContext {
     meet: string;
     famouS: string;
     date: string;
+    intentid: string;
     intent: string;
     counter: number;
     intenDId: string;
+    
+    
     
     question1: string;
     question2: string;
@@ -74,4 +77,5 @@ type SDSEvent =
     | { type: 'ENDSPEECH' }
     | { type: 'LISTEN' }
     | { type: 'TIMEOUT' }
+    | { type: 'DONE' }
     | { type: 'SPEAK', value: string };

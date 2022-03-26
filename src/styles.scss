@@ -1,8 +1,8 @@
-$yel: rgb(124, 14, 41);
-$pnk: hsla(12, 100%, 77%, 0.137);
-$rd: #571a08;
+$yel: rgb(85, 6, 74);
+$pnk: hsla(303, 92%, 14%, 0.158);
+$rd: #570857ab;
 $mono: IBM Plex Mono, monospace;
-$dark: #310d04;
+$dark: #4d06538c;
 
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@1,300;1,700&display=swap');
 * {
@@ -12,6 +12,10 @@ $dark: #310d04;
 
 html, body {
     height: 100vh;;
+    background-image: url(https://cdn-apabk.nitrocdn.com/QQUvjmPGpOGmpUxCkqAsSnVUjfEULAuk/assets/static/optimized/rev-994310a/wp-content/uploads/2021/02/Funny-Riddles-e1615508044123.jpg);
+    background-position: center;
+    background-size: cover;
+   
 }
 
 .App {
